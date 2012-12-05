@@ -1,0 +1,54 @@
+Description: CTL EAP Query Tool for remote performance monitoring
+
+Usage: java -jar eapMonitor.jar -host -port -realm -u -p [options] 
+	1. Query a specific Object and Attribute
+		-host 10.0.0.1 -port 9999 -realm ManagementRealm -u user -p passwd -O /subsystem=datasources/data-source=exampleDS -A max-pool-size
+    2. Query multiple Attributes within 1 or more objects using the option (-add). 
+       Rename the attribute output using option (-r), and set warning/critical thresholds using options (-w -c)
+    	-host 10.0.0.1 -port 9999 -realm ManagementRealm -u user -p passwd -O /subsystem=datasources/data-source=exampleDS -A max-pool-size \
+    		-add "-O /subsystem=datasources/data-source=oracleDS/statistics=pool -A MaxWaitTime -w 5 -c 10 -r WaitTime" \
+    		-add "-O /subsystem=datasources/data-source=oracleDS/statistics=pool -A AvailableCount -r Available -w 5 -c 1" \
+    		-add "-O /subsystem=datasources/data-source=oracleDS/statistics=pool -A TimedOut" \
+    		-add "-O /subsystem=datasources/data-source=oracleDS/statistics=pool -A TotalBlockingTime -r Blocking"
+    3. List all attributes of a given object by only providing the object
+    	-host 10.0.0.1 -port 9999 -realm ManagementRealm -u user -p passwd -O /subsystem=datasources/data-source=exampleDS
+
+
+Mandatory parameters are:
+ -host    Management Interface Host
+ -port	Management Interface port
+ -realm	Management Interface Security Realm
+
+Options are:
+ -help
+		This Help Menu
+ -O <object>
+ 		Object name to be checked, for example, "java.lang:type=Memory"
+ -A <attribute>
+ 		Attribute of the object to be checked
+ -w <limit>
+	    Warning long value
+ -c <limit>
+	    Critical long value
+ -u <user name> 
+ 		User credentials for JMX
+ -p <password>
+	    Password credentials for JMX 
+ -x
+ 		Remove Warning/Critical thresholds from performance data for pnp4nagios graph visibility.  
+ 		If set, all monitors inherit this value.
+ -r <newAttrName>
+    	Replace the default jboss attribute name with a custom one in the output.
+ -datasources 
+ 		Dynamically find all xa and non-xa datasources, and monitor performance statistics with custom thresholds
+ -add "-O <object> -A <attribute>"
+ 		put additional arguments in "" to query additional attributes.  multiple -add options are supported
+ -sample 2,5000,function
+ 		take samples over time and calculate using function
+ -calc <expression>
+ 		run a single calculation (*/+-) to change the attribute value. 
+ 		To convert the value from Kbytes to MB: -calc /1024 
+
+Note that if warning level > critical, system checks object attribute value to be LESS THAN OR EQUAL warning, critical
+If warning level < critical, system checks object attribute value to be MORE THAN OR EQUAL warning, critical 
+	
