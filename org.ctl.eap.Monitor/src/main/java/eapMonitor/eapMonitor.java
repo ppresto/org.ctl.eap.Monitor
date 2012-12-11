@@ -231,18 +231,18 @@ public class eapMonitor
 		return df.format(num);
 	}
 	
-	private boolean compare(String level, Object checkData) {		
+	private boolean compare(String level, Object checkData) {
 		if (warning != null && critical != null){
-			if(checkData instanceof Number && Double.parseDouble(warning) > Double.parseDouble(critical) ) {
-				Number check = (Number)checkData;
+			if(isNumeric(checkData.toString()) && Double.parseDouble(warning) > Double.parseDouble(critical) ) {
+				Number check = Double.parseDouble(checkData.toString());
 				if(check.doubleValue()==Math.floor(check.doubleValue())) {
 					return check.doubleValue()<=Double.parseDouble(level);
 				} else {
 					return check.longValue()>=Long.parseLong(level);
 				}
-			}
-			if(checkData instanceof Number && Double.parseDouble(warning) < Double.parseDouble(critical) ) {
-				Number check = (Number)checkData;
+		}
+			if(isNumeric(checkData.toString()) && Double.parseDouble(warning) < Double.parseDouble(critical) ) {
+				Number check = Double.parseDouble(checkData.toString());
 				if(check.doubleValue()==Math.floor(check.doubleValue())) {
 					return check.doubleValue()>=Double.parseDouble(level);
 				} else {
@@ -250,8 +250,8 @@ public class eapMonitor
 				}
 			}
 		}
-			if(checkData instanceof Number ) {
-				Number check = (Number)checkData;
+			if(isNumeric(checkData.toString()) ) {
+				Number check = Double.parseDouble(checkData.toString());
 				if(check.doubleValue()==Math.floor(check.doubleValue())) {
 					return check.doubleValue()>=Double.parseDouble(level);
 				} else {
@@ -298,5 +298,15 @@ public class eapMonitor
             eapAttr.put("perfData", eapAttr.get("Attribute") +"="+ eapAttr.get("Value")+thresholds+";;");
 		return eapAttr;
 	}
+	
+	public static boolean isNumeric(String str) {  
+		  try {  
+		    double d = Double.parseDouble(str);  
+		  }  
+		  catch(NumberFormatException nfe) {  
+		    return false;  
+		  }  
+		  return true;  
+		}
 }
 

@@ -82,6 +82,7 @@ public class eapMultiQuery
 			}
 			else if (monitor.monitorDataSources()) {
 				eapAttrList = getDataSources(client);
+				eapAttrList.addAll(getXADataSources(client));
 				return checkAttrList(eapAttrList);
 			}
 			else {
@@ -107,14 +108,60 @@ public class eapMultiQuery
        }
 	return RETURN_UNKNOWN;  
     }
+    
+    public List<Map<String,String>> getXADataSources(eapClient client) throws Exception, InterruptedException {
+    	Map<String,String> dsAttr = new HashMap <String,String>();
+    	List<Map<String,String>> dsList = new ArrayList <Map<String,String>>();
+    	try {
+    		List<Property> ds = client.getXADataSources();
+    		for (Property datasource : ds){
+    				eapMonitor monitor = new eapMonitor(false);
+    				String monArgs = "-O /subsystem=datasources/xa-data-source="+datasource.getName()+"/statistics=pool -A MaxWaitTime -w 3 -c 8 -r "+datasource.getName()+".maxWait";
+    				monitor.parseArgs(monArgs.split(" "));
+	    			dsAttr = client.getAttribute(monitor.getObject(), monitor.getAttribute(), true, true);
+	    			dsList.add(monitor.validate(dsAttr));
+	    			
+	    			monitor = new eapMonitor(false);
+    				monArgs = "-O /subsystem=datasources/xa-data-source="+datasource.getName()+"/statistics=pool -A TimedOut -w 5 -r "+datasource.getName()+".timedOut";
+    				monitor.parseArgs(monArgs.split(" "));
+	    			dsAttr = client.getAttribute(monitor.getObject(), monitor.getAttribute(), true, true);
+	    			dsList.add(monitor.validate(dsAttr));
+	    			
+	    			monitor = new eapMonitor(false);
+    				monArgs = "-O /subsystem=datasources/xa-data-source="+datasource.getName()+"/statistics=pool -A TotalBlockingTime -r "+datasource.getName()+".totBlkTim";
+    				monitor.parseArgs(monArgs.split(" "));
+	    			dsAttr = client.getAttribute(monitor.getObject(), monitor.getAttribute(), true, true);
+	    			dsList.add(monitor.validate(dsAttr));
+	    			
+	    			monitor = new eapMonitor(false);
+	    			monArgs = "-O /subsystem=datasources/xa-data-source="+datasource.getName()+"/statistics=pool -A AvailableCount -r "+datasource.getName()+".availCount";
+    				monitor.parseArgs(monArgs.split(" "));
+	    			dsAttr = client.getAttribute(monitor.getObject(), monitor.getAttribute(), true, true);
+	    			dsList.add(monitor.validate(dsAttr));
+	    			//get 90% of the available connections to use as a warning threshold for ActiveCount below.
+	    			int acWarn = (int) (Double.parseDouble(monitor.getValue())*.90);
 
+	    			monitor = new eapMonitor(false);
+    				monArgs = "-O /subsystem=datasources/xa-data-source="+datasource.getName()+"/statistics=pool -A ActiveCount -w "+ Integer.toString(acWarn) +" -r "+datasource.getName()+".curCount";
+    				monitor.parseArgs(monArgs.split(" "));
+	    			dsAttr = client.getAttribute(monitor.getObject(), monitor.getAttribute(), true, true);
+	    			dsList.add(monitor.validate(dsAttr));	    			
+    		}
+			return dsList;
+    	} catch (IOException e){
+    		e.printStackTrace();
+    		return dsList;
+    	} catch (InterruptedException e) {
+    		e.printStackTrace();
+    		return dsList;
+    	}	
+    }
     public List<Map<String,String>> getDataSources(eapClient client) throws Exception, InterruptedException {
     	Map<String,String> dsAttr = new HashMap <String,String>();
     	List<Map<String,String>> dsList = new ArrayList <Map<String,String>>();
     	try {
     		List<Property> ds = client.getDataSources();
     		for (Property datasource : ds){
-
     				eapMonitor monitor = new eapMonitor(false);
     				String monArgs = "-O /subsystem=datasources/data-source="+datasource.getName()+"/statistics=pool -A MaxWaitTime -w 3 -c 8 -r "+datasource.getName()+".maxWait";
     				monitor.parseArgs(monArgs.split(" "));
@@ -134,7 +181,7 @@ public class eapMultiQuery
 	    			dsList.add(monitor.validate(dsAttr));
 	    			
 	    			monitor = new eapMonitor(false);
-	    			monArgs = "-O /subsystem=datasources/data-source="+datasource.getName()+"/statistics=pool -A AvailableCount e -w 5 -r "+datasource.getName()+".availCount";
+	    			monArgs = "-O /subsystem=datasources/data-source="+datasource.getName()+"/statistics=pool -A AvailableCount -r "+datasource.getName()+".availCount";
     				monitor.parseArgs(monArgs.split(" "));
 	    			dsAttr = client.getAttribute(monitor.getObject(), monitor.getAttribute(), true, true);
 	    			dsList.add(monitor.validate(dsAttr));
@@ -142,7 +189,7 @@ public class eapMultiQuery
 	    			int acWarn = (int) (Double.parseDouble(monitor.getValue())*.9);
 
 	    			monitor = new eapMonitor(false);
-    				monArgs = "-O /subsystem=datasources/data-source="+datasource.getName()+"/statistics=pool -A ActiveCount e -w "+ String.valueOf(acWarn) +" -r "+datasource.getName()+".curCount";
+    				monArgs = "-O /subsystem=datasources/data-source="+datasource.getName()+"/statistics=pool -A ActiveCount -w "+ Integer.toString(acWarn) +" -r "+datasource.getName()+".curCount";
     				monitor.parseArgs(monArgs.split(" "));
 	    			dsAttr = client.getAttribute(monitor.getObject(), monitor.getAttribute(), true, true);
 	    			dsList.add(monitor.validate(dsAttr));	    			

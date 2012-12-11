@@ -119,7 +119,7 @@ public class eapClient {
         	} else {
 
         			response = client.execute(new OperationBuilder(request).build());
-        			value = response.get(ClientConstants.RESULT).get(attribute).toString().replaceAll("^\"|\"$", "");
+        			value = response.get(ClientConstants.RESULT).get(attribute).toString().replaceAll("^\"|\"$", "");   			
         	}
         } catch (IOException e) {
     		e.printStackTrace();
@@ -182,12 +182,23 @@ public class eapClient {
 	    //request.get("recursive").set(true);
 	    request.get(ClientConstants.OP_ADDR).add("subsystem", "datasources");
 	    response = client.execute(new OperationBuilder(request).build());
-	    reportFailure(response);      
-	    dsList.addAll(response.get(ClientConstants.RESULT).get("data-source").asPropertyList());
-	    dsList.addAll(response.get(ClientConstants.RESULT).get("xa-data-source").asPropertyList());	    
+	    reportFailure(response);     
+	    dsList = response.get(ClientConstants.RESULT).get("data-source").asPropertyList();
 	    return dsList;
 	}
 
+	public List<Property> getXADataSources() throws IOException {
+	    ModelNode request = new ModelNode();
+	    ModelNode response = new ModelNode();
+	    List<Property> dsList = null;
+	    request.get(ClientConstants.OP).set("read-resource");
+	    //request.get("recursive").set(true);
+	    request.get(ClientConstants.OP_ADDR).add("subsystem", "datasources");
+	    response = client.execute(new OperationBuilder(request).build());
+	    reportFailure(response);     
+	    dsList = (response.get(ClientConstants.RESULT).get("xa-data-source").asPropertyList());	
+	    return dsList;
+	}
 	private static void reportFailure(final ModelNode node) {
 	    if (!node.get(ClientConstants.OUTCOME).asString().equals(ClientConstants.SUCCESS)) {
 	        final String msg;
