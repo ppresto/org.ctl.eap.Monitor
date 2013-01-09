@@ -37,27 +37,27 @@ public class eapMonitor
 	private JMXConnector connector;
 	private MBeanServerConnection connection;
 	private String warning, critical;
-	private String attributeName, infoAttribute, replaceName, useAttr;
+	private String attributeName, attributeKey, replaceName, useAttr, webConnector = null;
 	private Long totalTime;
-	private String attributeKey, infoKey;
     private String methodName;
 	private String object;
 	private String username, password, addr, securityRealmName;
 	private List<String> additionalArgs = new ArrayList<String>();
 	private List <String>calc = new ArrayList<String>();
-	private String [] samples;
+	public String [] samples;
 	private boolean disableWarnCrit = false;
-	private boolean datasources = false;
+	private boolean datasources, appHealth, transactions, messaging, jvmHealth = false;
 	private boolean argCheck = true;
+	List<Map<String,String>> eapAttrList = new ArrayList <Map<String,String>>();
     private Object defaultValue;
     private static final int RETURN_OK = 0; // 	 The plugin was able to check the service and it appeared to be functioning properly
-	private static final String OK_STRING = "JMX OK -"; 
+	private static final String OK_STRING = "EAP OK -"; 
 	private static final int RETURN_WARNING = 1; // The plugin was able to check the service, but it appeared to be above some "warning" threshold or did not appear to be working properly
-	private static final String WARNING_STRING = "JMX WARNING -"; 
+	private static final String WARNING_STRING = "EAP WARNING -"; 
 	private static final int RETURN_CRITICAL = 2; // The plugin detected that either the service was not running or it was above some "critical" threshold
-	private static final String CRITICAL_STRING = "JMX CRITICAL -"; 
+	private static final String CRITICAL_STRING = "EAP CRITICAL -"; 
 	private static final int RETURN_UNKNOWN = 3; // Invalid command line arguments were supplied to the plugin or low-level failures internal to the plugin (such as unable to fork, or open a tcp socket) that prevent it from performing the specified operation. Higher-level errors (such as name resolution errors, socket timeouts, etc) are outside of the control of plugins and should generally NOT be reported as UNKNOWN states.
-	private static final String UNKNOWN_STRING = "JMX UNKNOWN";
+	private static final String UNKNOWN_STRING = "EAP UNKNOWN";
 	
 	private Object checkData;
 	private Object infoData;
@@ -75,6 +75,18 @@ public class eapMonitor
 		disableWarnCrit = monitor.getdisableWarnCrit();
 		warning = monitor.getWarning();
 		critical = monitor.getCritical();
+	}
+	public eapMonitor(eapMonitor monitor, List<Map<String,String>> eapAttributesList){
+		argCheck = false;
+		object = monitor.getObject();
+		disableWarnCrit = monitor.getdisableWarnCrit();
+		warning = monitor.getWarning();
+		critical = monitor.getCritical();
+		eapAttrList = eapAttributesList;
+	}
+	public eapMonitor(List<Map<String,String>> eapAttributesList){
+		argCheck = false;
+		eapAttrList = eapAttributesList;
 	}
 
 	public void parseArgs(String [] args) throws Exception {
@@ -106,6 +118,9 @@ public class eapMonitor
                 else if(option.equals("-A")) {
 					attributeName = args[++i];
 				}
+                else if(option.equals("-C")) {
+					attributeKey = args[++i];
+				}
                 else if(option.equals("-w")) {
 					warning = args[++i];
 				}
@@ -124,14 +139,31 @@ public class eapMonitor
                 else if(option.equals("-calc")) {
                 	calc.add(args[++i]);
                 }
-                else if(option.equals("-attrCalc")) {
-                	useAttr = args[++i];
-                }
                 else if(option.equals("-add")) {
                 	additionalArgs.add(args[++i]);
                 }
+                else if(option.equals("-jvmhealth")) {
+                	jvmHealth = true;
+                	argCheck = false;
+                }
                 else if(option.equals("-datasources")) {
                 	datasources = true;
+                	argCheck = false;
+                }
+                else if(option.equals("-apphealth")) {
+                	appHealth = true;
+                	argCheck = false;
+                }
+                else if(option.equals("-transactions")) {
+                	transactions = true;
+                	argCheck = false;
+                }
+                else if(option.equals("-messaging")) {
+                	messaging = true;
+                	argCheck = false;
+                }
+                else if(option.equals("-connector")) {
+                	webConnector = args[++i];
                 	argCheck = false;
                 }
 			}
@@ -145,7 +177,7 @@ public class eapMonitor
 		}
 	
 	private void printHelp() {
-		InputStream is = eapMonitor.class.getClassLoader().getResourceAsStream("eapMonitor/HELP");
+		InputStream is = eapMonitor.class.getClassLoader().getResourceAsStream("resources/eapMonitor/HELP");
 		BufferedReader reader = new BufferedReader(new InputStreamReader(is));
 		StringBuilder help = new StringBuilder();
 		try{
@@ -189,6 +221,9 @@ public class eapMonitor
 	public String getAttribute() {
 		return attributeName;
 	}
+	public String getAttributeKey() {
+		return attributeKey;
+	}
 	public boolean getdisableWarnCrit() {
 		return disableWarnCrit;
 	}
@@ -207,11 +242,29 @@ public class eapMonitor
 	public void setCritical(String value) {
 		critical = value;
 	}
+	public boolean monitorJvmHealth() {
+		return jvmHealth;
+	}
 	public boolean monitorDataSources() {
 		return datasources;
 	}
+	public boolean monitorAppHealth() {
+		return appHealth;
+	}
+	public boolean monitorTransactions() {
+		return transactions;
+	}
+	public boolean monitorMessaging() {
+		return messaging;
+	}
+	public String monitorConnector() {
+		return webConnector;
+	}
 	public List<String> searchForAdditionalMonitors () {
 		return additionalArgs;
+	}
+	public String [] getSamples() {
+		return samples;
 	}
 	public String getReplaceName() {
 		return replaceName;
@@ -272,6 +325,18 @@ public class eapMonitor
 		String thresholds;
 		Map<String,String> eapAttr = map;
 		checkData = eapAttr.get("Value");
+		if (!calc.isEmpty() && isNumeric(checkData.toString())){
+			for ( String c : calc){
+	    		String operator = (String) c.subSequence(0,1);
+	    		String expr = c.substring(1);
+	    		if (isNumeric(expr)){
+	    			checkData = calc(checkData,operator,expr);
+	    		}
+	    		else
+	    			checkData = calc(checkData,operator,findAttrValue(expr));
+			}
+			eapAttr.put("Value", checkData.toString());
+    	}	
 		if(critical != null && compare( critical, checkData)){
 			status = RETURN_CRITICAL;	
 			eapAttr.put("status",String.valueOf(status));
@@ -299,7 +364,7 @@ public class eapMonitor
 		return eapAttr;
 	}
 	
-	public static boolean isNumeric(String str) {  
+	public static boolean isNumeric(String str) throws NumberFormatException {  
 		  try {  
 		    double d = Double.parseDouble(str);  
 		  }  
@@ -308,5 +373,29 @@ public class eapMonitor
 		  }  
 		  return true;  
 		}
+	
+	public Object calc(Object checkData, String operator, String number){
+		double newData = 0;
+		if(operator.equals("/")){
+			newData = Double.parseDouble(checkData.toString()) / Double.parseDouble(number);  
+		} else if(operator.equals("*")) {
+			newData = Double.parseDouble(checkData.toString()) * Double.parseDouble(number);
+		} else if(operator.equals("-")) {
+			newData = Double.parseDouble(checkData.toString()) - Double.parseDouble(number); 
+		} else if(operator.equals("+")) {
+			newData = Double.parseDouble(checkData.toString()) + Double.parseDouble(number); 
+		} else newData = 0;
+		return (Object)Double.parseDouble(decimalPlaces((float)newData));
+	}
+	public String findAttrValue(String attribute) {
+		for (Map<String, String> a: eapAttrList){
+		    for (Map.Entry<String, String> entry : a.entrySet()){
+	    		if (entry.getKey().equals("Attribute") && entry.getValue().equals(attribute)){
+	    			return(a.get("Value"));
+	    		}
+	    	}
+    	}
+		return "0";
+	}
 }
 

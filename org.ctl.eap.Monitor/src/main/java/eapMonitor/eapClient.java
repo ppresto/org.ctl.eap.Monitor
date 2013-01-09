@@ -3,6 +3,7 @@ package eapMonitor;
 import java.io.*;
 import java.text.DecimalFormat;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -14,6 +15,7 @@ import org.jboss.as.controller.client.helpers.*;
 
 import javax.management.ObjectName;
 import javax.management.OperationsException;
+import javax.management.openmbean.CompositeDataSupport;
 import javax.security.auth.callback.Callback;
 import javax.security.auth.callback.CallbackHandler;
 import javax.security.auth.callback.NameCallback;
@@ -68,16 +70,30 @@ public class eapClient {
 		System.out.println("release-codename: " + returnVal.get("result").get("release-codename").asString());
 	}
 
-	public void readResource(boolean includeRuntime, boolean recursive) throws Exception {
+	public List<Property> getObjectList(String object, String property, boolean includeRuntime, boolean recursive) throws Exception {
 		ModelNode op = new ModelNode();
 		op.get(ClientConstants.OP).set("read-resource");
 		op.get("recursive").set(recursive);
 		op.get("include-runtime").set(includeRuntime);
-		ModelNode returnVal = client.execute(op);
-		System.out.println(returnVal.get("result").toString());
+	    ModelNode response = new ModelNode();
+	    List<Property> objectList = null;
+	    Attributes = object.split("/");
+		if (Attributes != null && Attributes.length > 0){
+			for(int i=0; i<Attributes.length; i++){
+				if (Attributes[i].split("=").length == 2) {
+					String [] op_addr = Attributes[i].split("=");
+					op.get(ClientConstants.OP_ADDR).add(op_addr[0],op_addr[1]);
+				}
+			}
+		}
+	    response = client.execute(new OperationBuilder(op).build());
+	    reportFailure(response);     
+	    objectList = response.get(ClientConstants.RESULT).get(property).asPropertyList();
+	    return objectList;
 	}
 	
-	public Map<String,String> getAttribute(String object, String attribute, boolean recursive, boolean runtime) throws IOException, InterruptedException {
+	@SuppressWarnings("static-access")
+	public Map<String,String> getAttribute(String object, String attribute, String attributeKey, String [] samples, boolean recursive, boolean runtime) throws IOException, InterruptedException {
 		final ModelNode request = new ModelNode();
 		Map<String,String> eapAttr = new HashMap<String,String>();
 		ModelNode response = null;
@@ -107,7 +123,7 @@ public class eapClient {
         		for(int i=0; i<sample; i++){
 	        		Long startTime = System.nanoTime();
 	        		response = client.execute(new OperationBuilder(request).build());
-	    			value = response.get(ClientConstants.RESULT).get(attribute).toString().replaceAll("^\"|\"$", "");
+	        		value = response.get(ClientConstants.RESULT).get(attribute).asLong();
 	                Thread.currentThread().sleep(delay);
 	                Long endTime = System.nanoTime();
 	                totalTime = endTime - startTime + totalTime;
@@ -119,12 +135,22 @@ public class eapClient {
         	} else {
 
         			response = client.execute(new OperationBuilder(request).build());
-        			value = response.get(ClientConstants.RESULT).get(attribute).toString().replaceAll("^\"|\"$", "");   			
+        			if (attributeKey != null)
+        				value = response.get(ClientConstants.RESULT).get(attribute).get(attributeKey).toString().replaceAll("^\"|\"$|L$", ""); 
+        			else
+        				value = response.get(ClientConstants.RESULT).get(attribute).toString().replaceAll("^\"|\"$|L$", ""); 
+        			if (value.toString().matches("undefined")){
+        				value = 0;
+        			}
+        			
         	}
         } catch (IOException e) {
     		e.printStackTrace();
     	} catch (InterruptedException e) {
     		e.printStackTrace();
+    	} catch (NullPointerException e) {
+    		value = "0";
+    		//e.printStackTrace();
     	}
 		eapAttr.put("Attribute", attribute);
 		eapAttr.put("Value", value.toString());
@@ -183,6 +209,7 @@ public class eapClient {
 	    request.get(ClientConstants.OP_ADDR).add("subsystem", "datasources");
 	    response = client.execute(new OperationBuilder(request).build());
 	    reportFailure(response);     
+	    
 	    dsList = response.get(ClientConstants.RESULT).get("data-source").asPropertyList();
 	    return dsList;
 	}

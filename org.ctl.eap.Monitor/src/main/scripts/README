@@ -1,0 +1,58 @@
+### Usage ###
+
+  -U) Enter the full JMX URL (Required)
+  -O) JMX MBean Object (Required)
+  -A) JMX Attribute you want to read (Required) 
+  -K) JMX Child Attribute
+  -I) JMX Txt Attribute 
+  -J) JMX Child Txt Attribute
+  -r) Replace Attribute output name with new string
+  -w) jmxWarningValue
+  -c) jmxCriticalValue
+  -vvvv) JMX Verbose switch. can use v, vv, vvv, vvvv
+  -x) Disable warn/crit perf values in graphs. Helpful when attribute thresholds are very different 
+  -u) JMX User 
+  -p) JMX Password
+  -2) 2nd JMX Query. Must use '' around arg to send as single value. 
+	Additional queries can exclude -U to query previously defined URL in query 1.
+	Additional queries can exclude -O to query the previously defined mbean Object in query 1.
+  -3) 3rd JMX Query.
+  -4) 4th JMX Query. 
+  -5) 5th JMX Query. 
+  -6) 6th JMX Query. 
+  -7) 7th JMX Query. 
+  -8) 8th JMX Query. 
+  -9) 9th JMX Query. 
+
+
+### Weblogic Examples ###
+1.  Get HeapFreePercent for Sun JDK and replace (-r) the default output name to 'HeapFree%' 
+./check_jmxObjectSecure.sh -U service:jmx:rmi:///jndi/rmi://testt199.example.com:17703/jmxrmi -O com.bea:ServerRuntime=qcquotinge2e1,Name=qcquotinge2e1,Type=JVMRuntime -A HeapFreePercent -r HeapFree% -w 20 -c 5
+
+2. Get ExecuteThreadTotalCount, HoggingThreadCount, and Queuelength from one Object.  Then Get StuckThreadCount and PendingRequests from a deployed application (different object). In this case the deployed app is "qcquote"
+./check_jmxObjectSecure.sh -U service:jmx:rmi:///jndi/rmi://testt199.example.com:17703/jmxrmi -O com.bea:ServerRuntime=qcquotinge2e1,Name=ThreadPoolRuntime,Type=ThreadPoolRuntime -A ExecuteThreadTotalCount -w 100 -c 200 '-2 -A HoggingThreadCount -w 5 -c 10' '-3 -A QueueLength -w 10 -c 20' '-4 -O com.bea:ServerRuntime=qcquotinge2e1,Name=default,ApplicationRuntime=qcquote,Type=WorkManagerRuntime -A StuckThreadCount -w 5 -c 20' '-5 -A PendingRequests -w 10 -c 25'
+
+3. Get JDBC ConnectionPool Information and disable warn/crit thresholds for better graphs since they vary so much.
+./check_jmxObjectSecure.sh -U service:jmx:rmi:///jndi/rmi://testt199.example.com:17703/jmxrmi -O com.bea:ServerRuntime=qcquotinge2e1,Name=QuotingDataSource,Type=JDBCConnectionPoolRuntime -A MaxCapacity -w 101 -c 200 '-2 -A ActiveConnectionsHighCount -w 110 -c 150' '-3 -A ActiveConnectionsCurrentCount -w 80 -c 101' '-4 -A WaitingForConnectionCurrentCount -w 1 -c 10' -x
+
+4. Get JMS Pending Messages.  You will need the weblogic Server Name, and JMS Server Name on the host you are connecting to.
+./check_jmxObjectSecure.sh -U service:jmx:rmi:///jndi/rmi://testt199.example.com:17703/jmxrmi -O com.bea:ServerRuntime=qcquotinge2e1,Name=JMSServer-0,Type=JMSServerRuntime -A MessagesPendingCount -w 20 -c 50
+
+5. JTA Total Transactions and Total Rolled Back
+./check_jmxObjectSecure.sh -U service:jmx:rmi:///jndi/rmi://testt199.example.com:17703/jmxrmi -O com.bea:ServerRuntime=qcquotinge2e1,Name=JTARuntime,Type=JTARuntime -A TransactionTotalCount '-2 -A TransactionRolledBackTotalCount -w 100 -c 500' '-3 -A ActiveTransactionsTotalCount' -x
+
+### Other Java Examples ###
+1. Get NonHeapMemoryUsage, used, and max HeapMemory. Supress warn/crit values from graphs
+./check_jmxObjectSecure.sh -U service:jmx:rmi:///jndi/rmi://testt199.example.com:17703/jmxrmi -O java.lang:type=Memory -A HeapMemoryUsage -K max '-2 -A HeapMemoryUsage -K used -w 2300000000 -c 2500000000' '-3 -A NonHeapMemoryUsage -K used -w 512000000 -c 1024000000' -x
+
+2. Get Heap Stats (OldGen,Eden,Survivor,PermGen) for PS Old Gen, and PS Survivor Space if being used
+./check_jmxObjectSecure.sh -U service:jmx:rmi:///jndi/rmi://test.example.com:3333/jmxrmi -O 'java.lang:type=MemoryPool,name=PS Old Gen' -A Usage -K used -r OldGen "-2 -O java.lang:type=MemoryPool,name=PS Eden Space -A Usage -K used -r Eden" "-3 -O java.lang:type=MemoryPool,name=PS Survivor Space -A Usage -K used -r Survivor" "-4 -O java.lang:type=MemoryPool,name=PS Perm Gen -A Usage -K used -r PermGen"
+
+3. Get PS Scavenge GC collection count, and start/end time
+./check_jmxObjectSecure.sh -U service:jmx:rmi:///jndi/rmi://test.example.com:3333/jmxrmi -O 'java.lang:type=GarbageCollector,name=PS Scavenge' -A LastGcInfo -K endTime -r endTime "-2 -A LastGcInfo -K startTime -r startTime" "-3 -A CollectionCount -K total"
+
+4. Get MarkSweep GC collection count, and time
+./check_jmxObjectSecure.sh -U service:jmx:rmi:///jndi/rmi://test.example.com:3333/jmxrmi -O 'java.lang:type=GarbageCollector,name=PS MarkSweep' -A LastGcInfo -K endTime -r endTime "-2 -A LastGcInfo -K startTime -r startTime" "-3 -A CollectionCount -K total"
+
+5. Get Thread Info ( Total Threads, Current Threads warn @ 75/crit @ 100, and Daemon Threads)
+./check_jmxObjectSecure.sh -U service:jmx:rmi:///jndi/rmi://test.example.com:3333/jmxrmi -O java.lang:type=Threading -A TotalStartedThreadCount"-2 -A ThreadCount -w 75 -c 100" "-3 -A DaemonThreadCount"
