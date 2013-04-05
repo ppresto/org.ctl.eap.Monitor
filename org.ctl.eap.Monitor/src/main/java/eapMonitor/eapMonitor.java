@@ -46,7 +46,7 @@ public class eapMonitor
 	private List <String>calc = new ArrayList<String>();
 	public String [] samples;
 	private boolean disableWarnCrit = false;
-	private boolean datasources, appHealth, transactions, messaging, jvmHealth = false;
+	private boolean datasources, appHealth, jmsHealth, transactions, jvmHealth = false;
 	private boolean argCheck = true;
 	List<Map<String,String>> eapAttrList = new ArrayList <Map<String,String>>();
     private Object defaultValue;
@@ -154,12 +154,12 @@ public class eapMonitor
                 	appHealth = true;
                 	argCheck = false;
                 }
-                else if(option.equals("-transactions")) {
-                	transactions = true;
+                else if(option.equals("-jmshealth")) {
+                	jmsHealth = true;
                 	argCheck = false;
                 }
-                else if(option.equals("-messaging")) {
-                	messaging = true;
+                else if(option.equals("-transactions")) {
+                	transactions = true;
                 	argCheck = false;
                 }
                 else if(option.equals("-connector")) {
@@ -251,11 +251,11 @@ public class eapMonitor
 	public boolean monitorAppHealth() {
 		return appHealth;
 	}
+	public boolean monitorJmsHealth() {
+		return jmsHealth;
+	}
 	public boolean monitorTransactions() {
 		return transactions;
-	}
-	public boolean monitorMessaging() {
-		return messaging;
 	}
 	public String monitorConnector() {
 		return webConnector;
@@ -377,7 +377,10 @@ public class eapMonitor
 	public Object calc(Object checkData, String operator, String number){
 		double newData = 0;
 		if(operator.equals("/")){
-			newData = Double.parseDouble(checkData.toString()) / Double.parseDouble(number);  
+			if(Double.parseDouble(number) == 0)
+				newData = 0;
+			else
+				newData = Double.parseDouble(checkData.toString()) / Double.parseDouble(number);  
 		} else if(operator.equals("*")) {
 			newData = Double.parseDouble(checkData.toString()) * Double.parseDouble(number);
 		} else if(operator.equals("-")) {

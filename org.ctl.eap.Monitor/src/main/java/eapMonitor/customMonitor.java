@@ -17,8 +17,10 @@ public class customMonitor {
     	List<String> appList = new ArrayList <String>();
     	try {	
     		List<Property> objects = client.getObjectList(appObject, propertyList, false, false);
-    		for (Property obj : objects){
-    			appList.add(obj.getName());
+    		if(objects != null){
+	    		for (Property obj : objects){
+	    				appList.add(obj.getName());
+	    		}
     		}
 			return appList;
     	} catch (Exception e){
@@ -31,9 +33,12 @@ public class customMonitor {
     	List<String> appList = new ArrayList <String>();
     	try {	
     		List<Property> objects = client.getObjectList(appObject, propertyList, runtime, recursive);
-    		for (Property obj : objects){
-    			appList.add(obj.getName());
+    		if(objects != null){
+	    		for (Property obj : objects){
+	    				appList.add(obj.getName());
+	    		}
     		}
+    		
 			return appList;
     	} catch (Exception e){
     		e.printStackTrace();

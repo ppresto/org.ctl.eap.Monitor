@@ -87,13 +87,28 @@ public class eapClient {
 			}
 		}
 	    response = client.execute(new OperationBuilder(op).build());
-	    reportFailure(response);     
-	    objectList = response.get(ClientConstants.RESULT).get(property).asPropertyList();
+	    reportFailure(response);  
+	    try {
+	    	ModelNode test = response.get(ClientConstants.RESULT).get(property);
+	    	if (test.isDefined()){
+	    		objectList = test.asPropertyList();
+	    	}	
+	    }
+	    catch (Exception e){
+	    	e.printStackTrace();
+	    }
 	    return objectList;
 	}
 	
 	@SuppressWarnings("static-access")
 	public Map<String,String> getAttribute(String object, String attribute, String attributeKey, String [] samples, boolean recursive, boolean runtime) throws IOException, InterruptedException {
+		/*String command = "-O "+object+" -A "+attribute;
+		if(attributeKey != null)
+			command = command+" -C "+attributeKey;
+		if(samples != null)
+			command = command+" samples "+samples.toString();
+		System.out.println(command);
+		*/
 		final ModelNode request = new ModelNode();
 		Map<String,String> eapAttr = new HashMap<String,String>();
 		ModelNode response = null;

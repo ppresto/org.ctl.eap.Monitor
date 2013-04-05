@@ -1,31 +1,32 @@
 Description: CTL EAP Query Tool for remote performance monitoring
 
-Usage: java -jar eapMonitor.jar -host -port -realm -u -p [options] 
-	1. Query a specific Object and Attribute
+Usage: java -jar eapMonitor.jar -host -port -realm -u -p [options]
+	Ex: Query a specific Object and Attribute
 		-host 10.0.0.1 -port 9999 -realm ManagementRealm -u user -p passwd -O /subsystem=datasources/data-source=exampleDS -A max-pool-size
-    2. Query multiple Attributes within 1 or more objects using the option (-add). 
+    Ex: Query multiple Attributes within 1 or more objects using the -add option. 
        Rename the attribute output using option (-r), and set warning/critical thresholds using options (-w -c)
     	-host 10.0.0.1 -port 9999 -realm ManagementRealm -u user -p passwd -O /subsystem=datasources/data-source=exampleDS -A max-pool-size \
     		-add "-O /subsystem=datasources/data-source=oracleDS/statistics=pool -A MaxWaitTime -w 5 -c 10 -r WaitTime" \
     		-add "-O /subsystem=datasources/data-source=oracleDS/statistics=pool -A AvailableCount -r Available -w 5 -c 1" \
     		-add "-O /subsystem=datasources/data-source=oracleDS/statistics=pool -A TimedOut" \
     		-add "-O /subsystem=datasources/data-source=oracleDS/statistics=pool -A TotalBlockingTime -r Blocking"
-    3. List all attributes of a given object by only providing the object
+    Ex: List all attributes of a given object by only providing the object
     	-host 10.0.0.1 -port 9999 -realm ManagementRealm -u user -p passwd -O /subsystem=datasources/data-source=exampleDS
 
-
-Mandatory parameters are:
+Mandatory parameters to connect to the running JVM are:
  -host    Management Interface Host
  -port	Management Interface port
  -realm	Management Interface Security Realm
 
-Options are:
+Options to gather metrics:
  -help
 		This Help Menu
  -O <object>
  		Object name to be checked, for example, "java.lang:type=Memory"
  -A <attribute>
  		Attribute of the object to be checked
+ -C <child attribute>
+ 		In some cases an attribute will return a map of key->values. Use this to get a specific key's value
  -w <limit>
 	    Warning long value
  -c <limit>
@@ -37,17 +38,114 @@ Options are:
  -x
  		Remove Warning/Critical thresholds from performance data for pnp4nagios graph visibility.  
  		If set, all monitors inherit this value.
- -r <newAttrName>
+ -r <newAttributeName>
     	Replace the default jboss attribute name with a custom one in the output.
- -datasources 
- 		Dynamically find all xa and non-xa datasources, and monitor performance statistics with custom thresholds
  -add "-O <object> -A <attribute>"
- 		put additional arguments in "" to query additional attributes.  multiple -add options are supported
- -sample 2,5000,function
- 		take samples over time and calculate using function
+ 		add additional attribute queries within " " so they look like a single argument. 
+ 		multiple -add options are supported
+ -sample 2,5000,getDiffOverTime
+ 		take samples over time and calculate the difference.  Useful to find CPU usage.
  -calc <expression>
- 		run a single calculation (*/+-) to change the attribute value. 
- 		To convert the value from Kbytes to MB: -calc /1024 
+ 		run a single calculation (*/+-) to change the final attribute value. 
+ 		Multiple -calc options are supported. 
+
+Dynamic functions:
+ -datasources 
+ 		Dynamically find stats for all xa and non-xa datasources, and monitor performance statistics with custom thresholds
+ 		Example to Manually define all the datasource metrics:
+ 		Database datasource (ex: ExampleDS)
+		-O /subsystem=datasources/data-source=ExampleDS/statistics=pool -A MaxWaitTime -r ExampleDS.ds.maxWaitTime \
+		-add "-O /subsystem=datasources/data-source=ExampleDS/statistics=pool -A TimedOut -r ExampleDS.ds.timedOut" \
+		-add "-O /subsystem=datasources/data-source=ExampleDS/statistics=pool -A TotalBlockingTime -r ExampleDS.ds.totBlkTime" \
+		-add "-O /subsystem=datasources/data-source=ExampleDS/statistics=pool -A AvailableCount -r ExampleDS.ds.avail" \
+		-add "-O /subsystem=datasources/data-source=ExampleDS/statistics=pool -A ActiveCount -r ExampleDS.ds.active" \
+		-add "-O /subsystem=datasources/data-source=ExampleDS/statistics=pool -A ActiveCount -calc /"+ds+".ds.avail -calc *100 -w 95 -r ExampleDS.ds.usage"	
+		Database xa-datasource (ex: oracleDSxa)
+		-O /subsystem=datasources/xa-data-source=oracleDSxa/statistics=pool -A MaxWaitTime -r oracleDSxa.ds.maxWaitTime \
+		-add "-O /subsystem=datasources/xa-data-source=oracleDSxa/statistics=pool -A TimedOut -r oracleDSxa.ds.timedOut" \
+		-add "-O /subsystem=datasources/xa-data-source=oracleDSxa/statistics=pool -A TotalBlockingTime -r oracleDSxa.ds.totBlkTime" \
+		-add "-O /subsystem=datasources/xa-data-source=oracleDSxa/statistics=pool -A AvailableCount -r oracleDSxa.ds.avail" \
+		-add "-O /subsystem=datasources/xa-data-source=oracleDSxa/statistics=pool -A ActiveCount -r oracleDSxa.ds.active" \
+		-add "-O /subsystem=datasources/xa-data-source=oracleDSxa/statistics=pool -A ActiveCount -calc /"+ds+".ds.avail -calc *100 -w 95 -r oracleDSxa.ds.usage"
+		 		
+ -jvmhealth
+ 		Dynamically grab stats for memory, classloading, and thread resources within the running HEAP
+ 		Example to manual define all the jvmhealth metrics:
+ 		-O /core-service=platform-mbean/type=memory -A heap-memory-usage -C max -r TotalMemory \
+		-add "-O /core-service=platform-mbean/type=memory -A heap-memory-usage -C used -w 95 -calc /TotalMemory -calc *100 -r UsedMemory%" \
+		-add "-O /core-service=platform-mbean/type=memory -A non-heap-memory-usage -C used -r NonHeap" \
+		-add "-O /core-service=platform-mbean/type=memory-pool/name=PS_Perm_Gen -A usage -C used -r PermGen" \
+		-add "-O /core-service=platform-mbean/type=memory-pool/name=PS_Old_Gen -A usage -C used -r OldGen" \
+		-add "-O /core-service=platform-mbean/type=memory-pool/name=PS_Survivor_Space -A usage -C used -r Survivor" \
+		-add "-O /core-service=platform-mbean/type=memory-pool/name=PS_Eden_Space -A usage -C used -r Eden" \
+		-add "-O /core-service=platform-mbean/type=class-loading -A loaded-class-count -r LoadedClassCount" \
+		-add "-O /core-service=platform-mbean/type=threading -A thread-count -r liveThreads" \
+		-add "-O /core-service=platform-mbean/type=threading -A peak-thread-count -r liveThreadsMax" \
+		-add "-O /core-service=platform-mbean/type=threading -A daemon-thread-count -r DaemonThreads" \
+		-add "-O /core-service=platform-mbean/type=threading -A current-thread-cpu-time -r threadCpu"
+ 		
+ -jmshealth
+ 		Dynamically grab metrics for all JMS queues
+ 		Example to manual define all the jmshealth metrics:
+		-O /subsystem=messaging/hornetq-server=default/jms-queue=acmeExampleQueue -A message-count -r acmeExampleQueue.jmsq.msgCount \
+		-add "-O /subsystem=messaging/hornetq-server=default/jms-queue=acmeExampleQueue -A delivering-count -r acmeExampleQueue.jmsq.deliveringCount" \
+		-add "-O /subsystem=messaging/hornetq-server=default/jms-queue=acmeExampleQueue -A scheduled-count -r acmeExampleQueue.jmsq.scheduledCount" \
+		-add "-O /subsystem=messaging/hornetq-server=default/jms-queue=acmeExampleQueue -A messages-added -r acmeExampleQueue.jmsq.msgAdded"
+ -transactions
+ 		Get all the subsystem transaction information.
+ 		Example to manual define all the transactions metrics:
+ 		-O /subsystem=transactions -A number-of-aborted-transactions -r trx.aborted \
+		-add "-O /subsystem=transactions -A number-of-application-rollbacks -r trx.rollbacks" \
+		-add "-O /subsystem=transactions -A number-of-committed-transactions -r trx.committed" \
+		-add "-O /subsystem=transactions -A number-of-heuristics -r trx.heuristics" \
+		-add "-O /subsystem=transactions -A number-of-inflight-transactions -r trx.inflight" \
+		-add "-O /subsystem=transactions -A nested -r trx.nested" \
+		-add "-O /subsystem=transactions -A number-of-resource-rollbacks -r trx.resourceRollbacks" \
+		-add "-O /subsystem=transactions -A number-of-timed-out-transactions -r trx.timedOut" \
+		-add "-O /subsystem=transactions -A number-of-number-of-transactions -r trx.number"
+ -connector <type>
+ 		types include http, https, ajp, etc...
+ 		Example to manual define all the metrics for -connector http
+		-O /subsystem=web/connector=https -A bytesReceived -r http.bytesRec \
+		-add "-O /subsystem=web/connector=https -A bytesSent -r http.bytesSent" \
+		-add "-O /subsystem=web/connector=https -A errorCount -r http.errors" \
+		-add "-O /subsystem=web/connector=https -A maxTime -r http.maxTime" \
+		-add "-O /subsystem=web/connector=https -A processingTime -samples 2,2000,getDiffOverTime -calc *100 -w 95 -r http.Cpu%" \
+		-add "-O /subsystem=web/connector=https -A requestCount -r http.reqCount"
+ -apphealth
+ 		Dynamically grab metrics for all JMS queues, subdeployments (web, webservices, jpa, ejb3 MDB)
+ 		Examples to manually define metrics for apphealth:
+ 		#JMS queue acmeExampleQueue
+		-O /subsystem=messaging/hornetq-server=default/jms-queue=acmeExampleQueue -A message-count -r acmeExampleQueue.jmsq.msgCount \
+		-add "-O /subsystem=messaging/hornetq-server=default/jms-queue=acmeExampleQueue -A delivering-count -r acmeExampleQueue.jmsq.deliveringCount" \
+		-add "-O /subsystem=messaging/hornetq-server=default/jms-queue=acmeExampleQueue -A scheduled-count -r acmeExampleQueue.jmsq.scheduledCount" \
+		-add "-O /subsystem=messaging/hornetq-server=default/jms-queue=acmeExampleQueue -A messages-added -r acmeExampleQueue.jmsq.msgAdded" \
+		#jpa subdeployment acme.war
+		-O /deployment=acme-ear.ear/subdeployment=acme.war/subsystem=jpa -A completed-transaction-count -r acme.war.jpa.trx.completed" \
+		-add "-O /deployment=acme-ear.ear/subdeployment=acme.war/subsystem=jpa -A successful-transaction-count -r acme.war.jpa.trx.success" \
+		-add "-O /deployment=acme-ear.ear/subdeployment=acme.war/subsystem=jpa -A query-execution-max-time -r acme.war.jpa.query.max.time" \
+		-add "-O /deployment=acme-ear.ear/subdeployment=acme.war/subsystem=jpa -A query-execution-max-time-query-string -r acme.war.jpa.query.string" 
+		#web subdeployment acme.war
+		-O /deployment=acme-ear.ear/subdeployment=acme.war/subsystem=web -A active-sessions -r acme.war.web.act.sess \
+		-add "-O /deployment=acme-ear.ear/subdeployment=acme.war/subsystem=web -A expired-sessions -r acme.war.web.exp.sess" \
+		-add "-O /deployment=acme-ear.ear/subdeployment=acme.war/subsystem=web -A rejected-sessions -r acme.war.web.reject.sess" \
+		-add "-O /deployment=acme-ear.ear/subdeployment=acme.war/subsystem=web -A session-avg-alive-time -r acme.war.web.avg.sess.alive" \
+		-add "-O /deployment=acme-ear.ear/subdeployment=acme.war/subsystem=web -A session-max-alive-time -r acme.war.web.max.sess.alive" 
+		#ejb3 MDB subdeployment acme-mdb.jar
+		-O /deployment=acme-ear.ear/subdeployment=acme-mdb.jar/subsystem=ejb3/message-driven-bean=ExampleMDB -A execution-time -r ExampleMDB.ejb.exec.time \
+		-add "-O /deployment=acme-ear.ear/subdeployment=acme-mdb.jar/subsystem=ejb3/message-driven-bean=ExampleMDB -A invocations -r ExampleMDB.ejb.invocations" \
+		-add "-O /deployment=acme-ear.ear/subdeployment=acme-mdb.jar/subsystem=ejb3/message-driven-bean=ExampleMDB -A peak-concurrent-invocations -r ExampleMDB.ejb.invocations.cur" \
+		-add "-O /deployment=acme-ear.ear/subdeployment=acme-mdb.jar/subsystem=ejb3/message-driven-bean=ExampleMDB -A pool-available-count -r ExampleMDB.ejb.pool.avail" \
+		-add "-O /deployment=acme-ear.ear/subdeployment=acme-mdb.jar/subsystem=ejb3/message-driven-bean=ExampleMDB -A pool-create-count -r ExampleMDB.ejb.pool.create" \
+		-add "-O /deployment=acme-ear.ear/subdeployment=acme-mdb.jar/subsystem=ejb3/message-driven-bean=ExampleMDB -A pool-current-size -r ExampleMDB.ejb.pool.cur" \
+		-add "-O /deployment=acme-ear.ear/subdeployment=acme-mdb.jar/subsystem=ejb3/message-driven-bean=ExampleMDB -A pool-current-size -calc /ExampleMDB.ejb.pool.avail -calc *100 -w 95 -r ExampleMDB.ejb.pool.cur.percent" \
+		-add "-O /deployment=acme-ear.ear/subdeployment=acme-mdb.jar/subsystem=ejb3/message-driven-bean=ExampleMDB -A wait-time -r ExampleMDB.ejb.wait.time"
+		#webservices subdeployment
+		-add "-O /deployment=acme-ear.ear/subdeployment=jaxws.war/subsystem=webservices/endpoint=jaxws.helloWorld -A average-processing-time -r jaxws.war.ws.avg.proc.time \
+		-add "-O /deployment=acme-ear.ear/subdeployment=jaxws.war/subsystem=webservices/endpoint=jaxws.helloWorld -A fault-count -r jaxws.war.ws.fault-count" \
+		-add "-O /deployment=acme-ear.ear/subdeployment=jaxws.war/subsystem=webservices/endpoint=jaxws.helloWorld -A request-count -r jaxws.war.ws.request-count" \
+		-add "-O /deployment=acme-ear.ear/subdeployment=jaxws.war/subsystem=webservices/endpoint=jaxws.helloWorld -A response-count -r jaxws.war.ws.response-count"
+ 		
 
 Note that if warning level > critical, system checks object attribute value to be LESS THAN OR EQUAL warning, critical
 If warning level < critical, system checks object attribute value to be MORE THAN OR EQUAL warning, critical 

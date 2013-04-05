@@ -89,11 +89,11 @@ public class eapMultiQuery
 			else if (monitor.monitorAppHealth()) {
 				return getAppHealth(client);
 			}
+			else if (monitor.monitorJmsHealth()) {
+				return getJmsHealth(client);
+			}
 			else if (monitor.monitorTransactions()) {
 				return getAppTransactions(client);
-			}
-			else if (monitor.monitorMessaging()) {
-				return getMessaging(client);
 			}
 			else if (monitor.monitorConnector() != null) {
 				return getConnector(client, monitor.monitorConnector());
@@ -161,22 +161,60 @@ public class eapMultiQuery
 		List<String> datasources = ah.getChildResourceNames(obj, "data-source", true, false);
 		for (String ds : datasources){
 			String dsObj = "-O "+obj+"/data-source="+ds+"/statistics=pool";
-			eapAttrList.addAll(ah.buildMonitor(dsObj+" -A MaxWaitTime -w 5000 -r "+ds+".ds.maxWaitTime"));
+			eapAttrList.addAll(ah.buildMonitor(dsObj+" -A MaxWaitTime -w 10000 -r "+ds+".ds.maxWaitTime"));
 			eapAttrList.addAll(ah.buildMonitor(dsObj+" -A TimedOut -w 10 -r "+ds+".ds.timedOut"));
 			eapAttrList.addAll(ah.buildMonitor(dsObj+" -A TotalBlockingTime -r "+ds+".ds.totBlkTime"));
 			eapAttrList.addAll(ah.buildMonitor(dsObj+" -A AvailableCount -r "+ds+".ds.avail"));
 			eapAttrList.addAll(ah.buildMonitor(dsObj+" -A ActiveCount -r "+ds+".ds.active"));
-			eapAttrList.addAll(ah.buildMonitor(eapAttrList,dsObj+" -A ActiveCount -calc /"+ds+".ds.avail -calc *100 -r "+ds+".ds.usage"));
+			eapAttrList.addAll(ah.buildMonitor(eapAttrList,dsObj+" -A ActiveCount -calc /"+ds+".ds.avail -calc *100 -r "+ds+".ds.usage -w 95"));
 		}
 		List<String> xadatasources = ah.getChildResourceNames(obj, "xa-data-source", true, false);
 		for (String ds : xadatasources){
 			String dsObj = "-O "+obj+"/xa-data-source="+ds+"/statistics=pool";
-			eapAttrList.addAll(ah.buildMonitor(dsObj+" -A MaxWaitTime -w 5000 -r "+ds+".ds.maxWaitTime"));
+			eapAttrList.addAll(ah.buildMonitor(dsObj+" -A MaxWaitTime -w 10000 -r "+ds+".ds.maxWaitTime"));
 			eapAttrList.addAll(ah.buildMonitor(eapAttrList,dsObj+" -A TimedOut -w 10 -r "+ds+".ds.timedOut"));
 			eapAttrList.addAll(ah.buildMonitor(eapAttrList,dsObj+" -A TotalBlockingTime -r "+ds+".ds.totBlkTime"));
 			eapAttrList.addAll(ah.buildMonitor(eapAttrList,dsObj+" -A AvailableCount -r "+ds+".ds.avail"));
 			eapAttrList.addAll(ah.buildMonitor(eapAttrList,dsObj+" -A ActiveCount -r "+ds+".ds.active"));
-			eapAttrList.addAll(ah.buildMonitor(eapAttrList,dsObj+" -A ActiveCount -calc /"+ds+".ds.avail -calc *100 -r "+ds+".ds.usage "));
+			eapAttrList.addAll(ah.buildMonitor(eapAttrList,dsObj+" -A ActiveCount -calc /"+ds+".ds.avail -calc *100 -r "+ds+".ds.usage -w 95"));
+		}
+		if(eapAttrList.isEmpty()){
+			Map<String,String> eapAttr = new HashMap <String,String>();
+			int status = RETURN_WARNING;
+			eapAttr.put("Attribute", "DataSources");
+			eapAttr.put("Value", "No Data Sources Found");
+			eapAttr.put("status",String.valueOf(status));
+			eapAttr.put("statusDesc",WARNING_STRING);
+			eapAttrList.add(eapAttr);
+		}
+		return checkAttrList(eapAttrList);
+    }
+    
+    public int getJmsHealth(eapClient client) throws Exception{
+    	customMonitor ah = new customMonitor(client);
+    	// Get JMS Messaging Metrics
+    	String obj = "/subsystem=messaging";
+		List<String> hqservers = ah.getChildResourceNames(obj, "hornetq-server", true, false);
+		for (String server : hqservers) {
+			obj = obj + "/hornetq-server="+server;
+			
+			List<String> queues = ah.getChildResourceNames(obj, "jms-queue", true, false);
+			for (String queue : queues){
+				String qObj = "-O " +obj+ "/jms-queue=" +queue;
+				eapAttrList.addAll(ah.buildMonitor(qObj+" -A message-count -r "+queue+".jmsq.msgCount"));
+				eapAttrList.addAll(ah.buildMonitor(qObj+" -A delivering-count -r "+queue+".jmsq.deliveringCount"));
+				eapAttrList.addAll(ah.buildMonitor(qObj+" -A scheduled-count -r "+queue+".jmsq.scheduledCount"));
+				eapAttrList.addAll(ah.buildMonitor(qObj+" -A messages-added -r "+queue+".jmsq.msgAdded"));
+			}
+		}
+		if(eapAttrList.isEmpty()){
+			Map<String,String> eapAttr = new HashMap <String,String>();
+			int status = RETURN_WARNING;
+			eapAttr.put("Attribute", "JMS");
+			eapAttr.put("Value", "No Queues Found");
+			eapAttr.put("status",String.valueOf(status));
+			eapAttr.put("statusDesc",WARNING_STRING);
+			eapAttrList.add(eapAttr);
 		}
 		return checkAttrList(eapAttrList);
     }
@@ -188,6 +226,7 @@ public class eapMultiQuery
 		List<String> hqservers = ah.getChildResourceNames(obj, "hornetq-server", true, false);
 		for (String server : hqservers) {
 			obj = obj + "/hornetq-server="+server;
+			
 			List<String> queues = ah.getChildResourceNames(obj, "jms-queue", true, false);
 			for (String queue : queues){
 				String qObj = "-O " +obj+ "/jms-queue=" +queue;
@@ -195,16 +234,17 @@ public class eapMultiQuery
 			eapAttrList.addAll(ah.buildMonitor(qObj+" -A delivering-count -r "+queue+".jmsq.deliveringCount"));
 			eapAttrList.addAll(ah.buildMonitor(qObj+" -A scheduled-count -r "+queue+".jmsq.scheduledCount"));
 			eapAttrList.addAll(ah.buildMonitor(qObj+" -A messages-added -r "+queue+".jmsq.msgAdded"));
+
 			}
 		}
 		// Get Application Deployments Metrics
-		obj = "";
-		List<String> deployments = ah.getChildResourceNames(obj, "deployment");
+    	obj = "";
+		List<String> deployments = ah.getChildResourceNames(obj, "deployment", true, false);
 		for (String app : deployments){
 			obj = "/deployment"+"="+app;
-			List<String> subdeployments = ah.getChildResourceNames(obj, "subdeployment");
+			List<String> subdeployments = ah.getChildResourceNames(obj, "subdeployment",true,false);
 			for(String subdeployment : subdeployments) {
-				List<String> subSystems = ah.getChildResourceNames(obj+"/subdeployment="+subdeployment, "subsystem" );
+				List<String> subSystems = ah.getChildResourceNames(obj+"/subdeployment="+subdeployment, "subsystem", true, false );
 				for (String sub: subSystems) {
 					if (sub.matches("web")){
 						String webObj = "-O "+obj+"/subdeployment="+subdeployment+"/subsystem="+sub;
@@ -216,7 +256,7 @@ public class eapMultiQuery
 						eapAttrList.addAll(ah.buildMonitor(webObj+" -A session-max-alive-time -r "+subdeployment+".web.max.sess.alive"));
 					}
 					if (sub.matches("webservices")) {
-						List<String> websvcs = ah.getChildResourceNames(obj+"/subdeployment="+subdeployment+"/subsystem="+sub, "endpoint" );
+						List<String> websvcs = ah.getChildResourceNames(obj+"/subdeployment="+subdeployment+"/subsystem="+sub, "endpoint", true, false );
 						for (String websvc: websvcs) {
 							String websvcObj = "-O "+obj+"/subdeployment="+subdeployment+"/subsystem="+sub+"/endpoint="+websvc;
 							eapAttrList.addAll(ah.buildMonitor(websvcObj+" -A average-processing-time -r "+websvc+".ws.avg.proc.time"));
@@ -234,7 +274,7 @@ public class eapMultiQuery
 						eapAttrList.addAll(ah.buildMonitor(jpaObj+" -A query-execution-max-time-query-string -r "+subdeployment+".jpa.query.string"));
 					}
 					if (sub.matches("ejb3")) {
-						List<String> ejbs = ah.getChildResourceNames(obj+"/subdeployment="+subdeployment+"/subsystem="+sub, "message-driven-bean" );
+						List<String> ejbs = ah.getChildResourceNames(obj+"/subdeployment="+subdeployment+"/subsystem="+sub, "message-driven-bean", true, false );
 						for (String ejb: ejbs) {
 							String ejbObj = "-O "+obj+"/subdeployment="+subdeployment+"/subsystem="+sub+"/message-driven-bean="+ejb;
 							eapAttrList.addAll(ah.buildMonitor(ejbObj+" -A execution-time -r "+ejb+".ejb.exec.time"));
@@ -243,15 +283,35 @@ public class eapMultiQuery
 							eapAttrList.addAll(ah.buildMonitor(ejbObj+" -A pool-available-count -r "+ejb+".ejb.pool.avail"));
 							eapAttrList.addAll(ah.buildMonitor(ejbObj+" -A pool-create-count -r "+ejb+".ejb.pool.create"));
 							eapAttrList.addAll(ah.buildMonitor(ejbObj+" -A pool-current-size -r "+ejb+".ejb.pool.cur"));
-							eapAttrList.addAll(ah.buildMonitor(eapAttrList, ejbObj+" -A pool-current-size -r "+ejb+".ejb.pool.cur.percent -calc /"+ejb+".ejb.pool.avail -calc *100"));
+							eapAttrList.addAll(ah.buildMonitor(eapAttrList, ejbObj+" -A pool-current-size -r "+ejb+".ejb.pool.cur.percent -calc /"+ejb+".ejb.pool.avail -calc *100 -w 95"));
 							eapAttrList.addAll(ah.buildMonitor(ejbObj+" -A wait-time -r "+ejb+".ejb.wait.time"));
 						}
 						
 					}
 				}
-				
 			}
-			
+			List<String> subsystems = ah.getChildResourceNames(obj, "subsystem",true,false);
+			for(String subsystem : subsystems) {
+					if (subsystem.matches("web")){
+						String webObj = "-O "+obj+"/subsystem="+subsystem;
+						//String arg = webObj+" -A active-sessions -r "+subdeployment+".act.sess";
+						eapAttrList.addAll(ah.buildMonitor(webObj+" -A active-sessions -r "+app+".web.act.sess"));
+						eapAttrList.addAll(ah.buildMonitor(webObj+" -A expired-sessions -r "+app+".web.exp.sess"));
+						eapAttrList.addAll(ah.buildMonitor(webObj+" -A rejected-sessions -r "+app+".web.reject.sess"));
+						eapAttrList.addAll(ah.buildMonitor(webObj+" -A session-avg-alive-time -r "+app+".web.avg.sess.alive"));
+						eapAttrList.addAll(ah.buildMonitor(webObj+" -A session-max-alive-time -r "+app+".web.max.sess.alive"));
+					}
+			}
+		}
+		if(eapAttrList.isEmpty()){
+			Map<String,String> eapAttr = new HashMap <String,String>();
+			int status = RETURN_WARNING;
+			eapAttr.put("Attribute", "Deployments");
+			eapAttr.put("Value", "None");
+			//eapAttr.put("perfData", "Deployments=0");
+			eapAttr.put("status",String.valueOf(status));
+			eapAttr.put("statusDesc",WARNING_STRING);
+			eapAttrList.add(eapAttr);
 		}
 		return checkAttrList(eapAttrList);
     }
@@ -260,7 +320,7 @@ public class eapMultiQuery
     	customMonitor ah = new customMonitor(client); 	
     	String memObj = "-O /core-service=platform-mbean/type=memory";
     	eapAttrList.addAll(ah.buildMonitor(memObj+" -A heap-memory-usage -C max -r TotalMemory"));
-    	eapAttrList.addAll(ah.buildMonitor(eapAttrList, memObj+" -A heap-memory-usage -C used -calc /TotalMemory -calc *100 -r UsedMemory%"));
+    	eapAttrList.addAll(ah.buildMonitor(eapAttrList, memObj+" -A heap-memory-usage -C used -calc /TotalMemory -calc *100 -r UsedMemory% -w 95"));
     	eapAttrList.addAll(ah.buildMonitor(eapAttrList, memObj+" -A non-heap-memory-usage -C used -r NonHeap"));
     	
 		memObj = "/core-service=platform-mbean/type=memory-pool";
@@ -296,23 +356,6 @@ public class eapMultiQuery
 		eapAttrList.addAll(ah.buildMonitor(eapAttrList, threadObj+" -A current-thread-cpu-time -r threadCpu"));
 		
 		
-		return checkAttrList(eapAttrList);
-    }
-    public int getMessaging(eapClient client) throws Exception {
-    	customMonitor ah = new customMonitor(client);
-		String obj = "/subsystem=messaging";
-		List<String> hqservers = ah.getChildResourceNames(obj, "hornetq-server", true, false);
-		for (String server : hqservers) {
-			obj = obj + "/hornetq-server="+server;
-			List<String> queues = ah.getChildResourceNames(obj, "jms-queue", true, false);
-			for (String queue : queues){
-				String qObj = "-O " +obj+ "/jms-queue=" +queue;
-			eapAttrList.addAll(ah.buildMonitor(qObj+" -A message-count -r "+queue+".jmsq.msgCount"));
-			eapAttrList.addAll(ah.buildMonitor(qObj+" -A delivering-count -r "+queue+".jmsq.deliveringCount"));
-			eapAttrList.addAll(ah.buildMonitor(qObj+" -A scheduled-count -r "+queue+".jmsq.scheduledCount"));
-			eapAttrList.addAll(ah.buildMonitor(qObj+" -A messages-added -r "+queue+".jmsq.msgAdded"));
-			}
-		}
 		return checkAttrList(eapAttrList);
     }
     
